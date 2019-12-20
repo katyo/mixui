@@ -1,0 +1,16 @@
+[package]
+name = "pianino"
+version = "0.1.0"
+authors = ["K. <kayo@illumium.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+winit = "^0.20.0-alpha5"
+glutin = "^0.22.0-alpha5"
+skia-safe = { version = "^0.21.1", features = [] }
+gl = "^0.14"
+
+[patch.crates-io]
+skia-safe = { path = "../rust-skia/skia-safe" }
