@@ -9,8 +9,6 @@ edition = "2018"
 [dependencies]
 winit = "^0.20.0-alpha5"
 glutin = "^0.22.0-alpha5"
-skia-safe = { version = "^0.21.1", features = [] }
-gl = "^0.14"
+glow = "^0.3.0-alpha4"
 
 [patch.crates-io]
-skia-safe = { path = "../rust-skia/skia-safe" }

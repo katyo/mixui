@@ -1,51 +1,27 @@
 mod platform;
+mod sgl;
 
 use std::path::PathBuf;
 
 use platform::{Key, Button, Phase, EventHandler, Platform, ViewConfig};
 
-use skia_safe::{gpu, Surface, SurfaceProps, SurfacePropsFlags, Color, Paint, paint::Style, ImageInfo, Budgeted, ColorSpace, ColorType};
+use sgl::{GL, HasContext, demo::Demo};
+use glow::{Context};
 
-use gl;
-
-use std::ffi::c_void;
-
-pub struct Application {
-    context: gpu::Context,
-    surface: Option<Surface>,
+pub struct Application<G: HasContext> {
     text: String,
+    demo: Option<Demo<G>>,
 }
 
-impl Application {
-    pub fn new<F: FnMut(&str)-> *const c_void>(get_proc: F) -> Self {
-        let interface = gpu::gl::Interface::new_load_with(get_proc)
-            .expect("Invalid GPU interface");
-
-        //let interface = None;
-        let context = gpu::Context::new_gl(interface)
-            .expect("Unable to create skia GPU context");
-
-        Self { context, surface: None, text: String::default(), }
-    }
-
-    pub fn draw(&mut self) {
-        if let Some(surface) = &mut self.surface {
-            let canvas = surface.canvas();
-
-            canvas.clear(Color::WHITE);
-
-            let mut p = Paint::default();
-            p.set_color(Color::RED);
-            p.set_anti_alias(true);
-            p.set_style(Style::Stroke);
-            p.set_stroke_width(10.0);
-
-            canvas.draw_line((20, 20), (100, 100), &p);
-        }
+impl<G: HasContext> Application<G> {
+    pub fn new() -> Self {
+        Self { text: String::from("Text"), demo: None }
     }
 }
 
-impl EventHandler for Application {
+impl<G: HasContext> EventHandler for Application<G> {
+    type Context = G;
+
     fn input(&mut self, chr: char) {
         println!("input: {} #{}", chr, chr as u32);
         if chr as u32 >= 0x20 {
@@ -100,106 +76,19 @@ impl EventHandler for Application {
         println!("file drop: {:?}", path);
     }
 
-    fn reconf(&mut self, ViewConfig { color_bits, alpha_bits, stencil_bits, num_samples, srgb_mode, view_width, view_height, dot_ratio, .. }: ViewConfig) {
+    fn reconf(&mut self, ViewConfig { color_bits, alpha_bits, stencil_bits, num_samples, srgb_mode, view_width, view_height, dot_ratio, .. }: ViewConfig, gl: &G) {
         println!("resize: {}x{} dot: {}", view_width, view_height, dot_ratio);
 
-        if self.surface.is_some() {
-            self.surface = None;
+        if self.demo.is_none() {
+            self.demo = Some(Demo::new(gl).expect("Unable to init demo"));
         }
-
-        /*
-        let image_info = ImageInfo::new_n32_premul(
-            (view_width as i32, view_height as i32),
-            if srgb_mode { Some(ColorSpace::new_srgb()) } else { None }
-        );
-
-        let surface = Surface::new_render_target(
-            &mut self.context,
-            Budgeted::YES,
-            &image_info,
-            None, // sample count
-            gpu::SurfaceOrigin::BottomLeft, // surface origin
-            None, // &surface_props,
-            None, // should create with mips
-        ).expect("Unable to create surface");
-         */
-
-        let format = if srgb_mode {
-            match (color_bits, alpha_bits) {
-                (24, 8) => gpu::gl::Format::SRGB8_ALPHA8,
-                _ => gpu::gl::Format::Unknown,
-            }
-        } else {
-            match (color_bits, alpha_bits) {
-                (24, 8) => gpu::gl::Format::RGBA8,
-                (12, 4) => gpu::gl::Format::RGBA4,
-                (30, 2) => gpu::gl::Format::RGB10_A2,
-                (16, 0) => gpu::gl::Format::RGB565,
-                (8, 0) => gpu::gl::Format::R8,
-                (0, 8) => gpu::gl::Format::ALPHA8,
-                _ => gpu::gl::Format::Unknown,
-            }
-        };
-
-        let mut fboid = 0i32;
-
-        unsafe { gl::GetIntegerv(gl::FRAMEBUFFER_BINDING, &mut fboid); }
-
-        let framebuffer_info = gpu::gl::FramebufferInfo {
-            fboid: fboid as u32,
-            format: format as u32,
-        };
-
-        let backend_render_target = gpu::BackendRenderTarget::new_gl(
-            (view_width as i32, view_height as i32),
-            num_samples as usize,
-            stencil_bits as usize,
-            framebuffer_info,
-        );
-
-        if !backend_render_target.is_valid() {
-            panic!("Unable to create valid backend render target");
-        }
-
-        let surface_props = SurfaceProps::default();
-
-        let color_type = match (color_bits, alpha_bits) {
-            (24, 8) => ColorType::RGBA8888,
-            (12, 4) => ColorType::ARGB4444,
-            (30, 2) => ColorType::RGBA1010102,
-            (16, 0) => ColorType::RGB565,
-            (32, 0) => ColorType::RGB888x,
-            (8, 0) => ColorType::Gray8,
-            (0, 8) => ColorType::Alpha8,
-            _ => panic!("Unsupported color type for color_bits: {} and alpha bits: {}", color_bits, alpha_bits),
-        };
-
-        let color_space = if srgb_mode {
-            println!("Use sRGB color space");
-            Some(ColorSpace::new_srgb())
-        } else {
-            None
-        };
-
-        let surface = Surface::from_backend_render_target(
-            &mut self.context,
-            &backend_render_target,
-            gpu::SurfaceOrigin::BottomLeft, // surface origin
-            color_type,
-            color_space,
-            None, //Some(&surface_props),
-        ).expect("Unable to create surface");
-
-        self.surface = Some(surface);
     }
 
-    fn redraw(&mut self) {
+    fn redraw(&mut self, gl: &G) {
         //println!("redraw");
-        self.draw();
-
-        //canvas.flush();
-        //surface.flush();
-        self.context.flush();
+        if let Some(demo) = &self.demo {
+            demo.render(gl);
+        }
     }
 
     fn destroy(&mut self) {
@@ -217,7 +106,7 @@ impl EventHandler for Application {
 
 fn main() {
     let platform = Platform::new();
-    let application = Application::new(|proc_name| platform.get_proc(proc_name));
+    let application = Application::<Context>::new();
 
     platform.run(application);
 }
