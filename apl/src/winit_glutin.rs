@@ -1,8 +1,3 @@
-use std::{
-    time::Duration,
-    thread::sleep
-};
-
 use winit::{
     event::{
         Event, WindowEvent, ElementState,
@@ -16,6 +11,8 @@ use winit::{
 use glutin::{
     ContextBuilder,
     ContextWrapper,
+    ContextError,
+    NotCurrent,
     PossiblyCurrent,
     GlRequest, Api,
     //GlProfile,
@@ -27,12 +24,7 @@ use sgl::{GL, HasContext, Context as GlContext};
 
 use super::{Key, EventHandler, ViewConfig, AppConfig};
 
-pub struct Platform {
-    event_loop: EventLoop<()>,
-    state: State,
-}
-
-struct State {
+struct View {
     dot_ratio: f64,
     view_size: PhysicalSize,
 
@@ -40,43 +32,11 @@ struct State {
     pixel_format: PixelFormat,
     gl_size: (i32, i32),
     gl: GlContext,
-
-    visible: bool,
 }
 
-impl State {
-    fn new(event_loop: &EventLoop<()>, config: AppConfig) -> Self {
-        let window_builder = WindowBuilder::new()
-            .with_title(config.title)
-            .with_visible(true)
-            .with_decorations(true)
-            .with_resizable(true)
-            .with_window_icon(config.icon);
-
-        let gl_context = ContextBuilder::new()
-            .with_gl(/*GlRequest::GlThenGles {
-                opengl_version: (2, 0),
-                opengles_version: (2, 0)
-            }*/GlRequest::Specific(Api::OpenGlEs, (2, 0)))
-            .with_vsync(true)
-            //.with_gl_profile(GlProfile::Core)
-            //.with_pixel_format(24, 8)
-            //.with_stencil_buffer(8)
-            //.with_depth_buffer(0)
-            //.with_double_buffer(Some(true))
-            //.with_multisampling(0)
-            .build_windowed(window_builder, &event_loop)
-            .unwrap();
-
-        let (dot_ratio, view_size, gl_size) = {
-            let window = gl_context.window();
-            let dot_ratio = window.hidpi_factor();
-            let view_size = window.inner_size().to_physical(dot_ratio);
-            let gl_size = (view_size.width as i32, view_size.height as i32);
-            (dot_ratio, view_size, gl_size)
-        };
-
-        let gl_context = unsafe { gl_context.make_current().unwrap() };
+impl View {
+    fn try_init(gl_context: ContextWrapper<NotCurrent, Window>) -> Result<Self, (ContextWrapper<NotCurrent, Window>, ContextError)> {
+        let gl_context = unsafe { gl_context.make_current()? };
 
         let gl = GlContext::from_loader_function(
             |proc_name| gl_context.get_proc_address(proc_name)
@@ -113,9 +73,19 @@ impl State {
             gl.stencil_mask(0xffffffff);
         }
 
+        let (dot_ratio, view_size, gl_size) = {
+            let window = gl_context.window();
+            let dot_ratio = window.hidpi_factor();
+            let view_size = window.inner_size().to_physical(dot_ratio);
+            let gl_size = (view_size.width as i32, view_size.height as i32);
+            (dot_ratio, view_size, gl_size)
+        };
+
+        println!("View scale: {} size: {:?}", dot_ratio, gl_size);
+
         let gl_context = Some(gl_context);
 
-        Self {
+        Ok(Self {
             dot_ratio,
             view_size,
 
@@ -123,9 +93,11 @@ impl State {
             pixel_format,
             gl_size,
             gl,
+        })
+    }
 
-            visible: true,
-        }
+    fn teardown(mut self) -> ContextWrapper<NotCurrent, Window> {
+        unsafe { self.gl_context.take().unwrap().treat_as_not_current() }
     }
 
     fn resize(&mut self) {
@@ -133,6 +105,18 @@ impl State {
                         self.view_size.height as i32);
         self.gl_context.as_ref().unwrap().resize(self.view_size);
         unsafe { self.gl.viewport(0, 0, self.gl_size.0, self.gl_size.1); }
+    }
+
+    /*fn suspend(&mut self) {
+        self.gl_context = self.gl_context.take().map(|gl_context| unsafe { gl_context.make_not_current().unwrap().treat_as_current() });
+    }
+
+    fn resume(&mut self) {
+        self.gl_context = self.gl_context.take().map(|gl_context| unsafe { gl_context.treat_as_not_current().make_current().unwrap() });
+    }*/
+
+    fn request_redraw(&self) {
+        self.gl_context.as_ref().unwrap().window().request_redraw();
     }
 
     fn view_config(&self) -> ViewConfig {
@@ -153,146 +137,188 @@ impl State {
         )
     }
 
-    fn handle<H: EventHandler<Context = GlContext>>(&mut self, event: Event<()>, control_flow: &mut ControlFlow, handler: &mut H) {
+    fn handle<H: EventHandler<Context = GlContext>>(&mut self, event: WindowEvent, control_flow: &mut ControlFlow, handler: &mut H) {
+        use self::WindowEvent::*;
         match event {
-            Event::EventsCleared => {
-                // Application update code.
+            RedrawRequested => {
+                // Redraw the application.
+                //
+                // It's preferrable to render in this event rather than in EventsCleared, since
+                // rendering in here allows the program to gracefully handle redraws requested
+                // by the OS.
 
-                // Queue a RedrawRequested event.
-                if self.visible {
-                    self.gl_context.as_ref().unwrap().window().request_redraw();
+                handler.redraw(&self.gl);
+                self.gl_context.as_ref().unwrap().swap_buffers().unwrap();
+            },
+            CloseRequested => {
+                println!("The close button was pressed; stopping");
+                *control_flow = ControlFlow::Exit;
+            },
+            Resized(inner_size) => {
+                if inner_size.width > 0.0 && inner_size.height > 0.0 {
+                    self.view_size = inner_size.to_physical(self.dot_ratio);
+                    //sleep(Duration::from_millis(250));
+                    self.resize();
                 }
+                handler.reconf(self.view_config(), &self.gl);
             },
-            Event::LoopDestroyed => {
-                handler.destroy();
+            HiDpiFactorChanged(dot_ratio) => {
+                let size = self.gl_context.as_ref().unwrap().window().inner_size();
+                self.view_size = size.to_physical(dot_ratio);
+                self.dot_ratio = dot_ratio;
+                self.resize();
+                handler.reconf(self.view_config(), &self.gl);
             },
-            Event::Suspended => {
-                handler.suspend();
-                self.visible = false;
+            ReceivedCharacter(uchar) => {
+                handler.input(uchar);
             },
-            Event::Resumed => {
-                self.visible = true;
-                self.gl_context = self.gl_context.take().map(|gl_context| unsafe { gl_context.treat_as_not_current().make_current().unwrap() });
-                handler.resume();
-            },
-            Event::WindowEvent { event, .. } => {
-                use self::WindowEvent::*;
-                match event {
-                    RedrawRequested => {
-                        // Redraw the application.
-                        //
-                        // It's preferrable to render in this event rather than in EventsCleared, since
-                        // rendering in here allows the program to gracefully handle redraws requested
-                        // by the OS.
-
-                        if self.visible {
-                            handler.redraw(&self.gl);
-                            self.gl_context.as_ref().unwrap().swap_buffers().unwrap();
-                        }
-                    },
-                    CloseRequested => {
+            KeyboardInput { input: KeyboardInputEvent { state, virtual_keycode, .. }, .. } => {
+                if let Some(keycode) = virtual_keycode {
+                    if keycode == Key::Escape {
                         println!("The close button was pressed; stopping");
                         *control_flow = ControlFlow::Exit;
-                    },
-                    Resized(inner_size) => {
-                        if self.visible && inner_size.width > 0.0 && inner_size.height > 0.0 {
-                            self.view_size = inner_size.to_physical(self.dot_ratio);
-                            //sleep(Duration::from_millis(250));
-                            self.resize();
-                            handler.reconf(self.view_config(), &self.gl);
-                        }
-                    },
-                    HiDpiFactorChanged(dot_ratio) => {
-                        if self.visible {
-                            let size = self.gl_context.as_ref().unwrap().window().inner_size();
-                            self.view_size = size.to_physical(dot_ratio);
-                            self.dot_ratio = dot_ratio;
-                            //sleep(Duration::from_millis(250));
-                            self.resize();
-                            handler.reconf(self.view_config(), &self.gl);
-                        }
-                    },
-                    ReceivedCharacter(uchar) => {
-                        handler.input(uchar);
-                    },
-                    KeyboardInput { input: KeyboardInputEvent { state, virtual_keycode, .. }, .. } => {
-                        if let Some(keycode) = virtual_keycode {
-                            if keycode == Key::Escape {
-                                println!("The close button was pressed; stopping");
-                                *control_flow = ControlFlow::Exit;
-                            } else {
-                                handler.key(keycode, state == ElementState::Pressed);
-                            }
-                        }
-                    },
-                    CursorMoved { position, .. } => {
-                        handler.pointer(position.x as f32, position.y as f32, self.dot_ratio as f32);
-                    },
-                    MouseInput { button, state, .. } => {
-                        handler.button(button, state == ElementState::Pressed);
-                    },
-                    MouseWheel { delta, .. } => {
-                        use self::MouseScrollDelta::*;
-                        let (dx, dy, dot) = match delta {
-                            LineDelta(dx, dy) => (dx, dy, false),
-                            PixelDelta(pos) => (pos.x as f32, pos.y as f32, true),
-                        };
-                        handler.scroll(dx, dy, dot);
-                    },
-                    Touch (TouchEvent { location, phase, .. }) => {
-                        handler.touch(location.x as f32, location.y as f32, phase);
-                    },
-                    CursorEntered { .. } => {
-                        handler.hover(true);
-                    },
-                    CursorLeft { .. } => {
-                        handler.hover(false);
-                    },
-                    Focused(state) => {
-                        handler.focus(state);
-                    },
-                    HoveredFile(path) => {
-                        handler.file_over(path);
-                    },
-                    HoveredFileCancelled => {
-                        handler.file_out();
-                    },
-                    DroppedFile(path) => {
-                        handler.file_drop(path);
-                    },
-                    _ => (),
+                    } else {
+                        handler.key(keycode, state == ElementState::Pressed);
+                    }
                 }
             },
-            // ControlFlow::Poll continuously runs the event loop, even if the OS hasn't
-            // dispatched any events. This is ideal for games and similar applications.
-            //_ => *control_flow = ControlFlow::Poll,
-            // ControlFlow::Wait pauses the event loop if no events are available to process.
-            // This is ideal for non-game applications that only update in response to user
-            // input, and uses significantly less power/CPU time than ControlFlow::Poll.
-            _ => *control_flow = ControlFlow::Wait,
+            CursorMoved { position, .. } => {
+                handler.pointer(position.x as f32, position.y as f32, self.dot_ratio as f32);
+            },
+            MouseInput { button, state, .. } => {
+                handler.button(button, state == ElementState::Pressed);
+            },
+            MouseWheel { delta, .. } => {
+                use self::MouseScrollDelta::*;
+                let (dx, dy, dot) = match delta {
+                    LineDelta(dx, dy) => (dx, dy, false),
+                    PixelDelta(pos) => (pos.x as f32, pos.y as f32, true),
+                };
+                handler.scroll(dx, dy, dot);
+            },
+            Touch (TouchEvent { location, phase, .. }) => {
+                handler.touch(location.x as f32, location.y as f32, phase);
+            },
+            CursorEntered { .. } => {
+                handler.hover(true);
+            },
+            CursorLeft { .. } => {
+                handler.hover(false);
+            },
+            Focused(state) => {
+                handler.focus(state);
+            },
+            HoveredFile(path) => {
+                handler.file_over(path);
+            },
+            HoveredFileCancelled => {
+                handler.file_out();
+            },
+            DroppedFile(path) => {
+                handler.file_drop(path);
+            },
+            _ => (),
         }
     }
+}
+
+pub struct Platform {
+    event_loop: EventLoop<()>,
+    gl_context: ContextWrapper<NotCurrent, Window>,
 }
 
 impl Platform {
     pub fn new(config: AppConfig) -> Self {
         let event_loop = EventLoop::new();
-        let state = State::new(&event_loop, config);
 
-        Self {
-            event_loop,
-            state,
-        }
+        let window_builder = WindowBuilder::new()
+            .with_title(config.title)
+            .with_visible(true)
+            .with_decorations(true)
+            .with_resizable(true)
+            .with_window_icon(config.icon);
+
+        let gl_context = ContextBuilder::new()
+            .with_gl(/*GlRequest::GlThenGles {
+                opengl_version: (2, 0),
+                opengles_version: (2, 0)
+            }*/GlRequest::Specific(Api::OpenGlEs, (2, 0))
+                     /*GlRequest::Latest*/)
+            .with_vsync(true)
+            //.with_gl_profile(GlProfile::Core)
+            //.with_pixel_format(24, 8)
+            //.with_stencil_buffer(8)
+            //.with_depth_buffer(0)
+            //.with_double_buffer(Some(true))
+            //.with_multisampling(0)
+            .build_windowed(window_builder, &event_loop)
+            .unwrap();
+
+        Self { event_loop, gl_context }
     }
 
     pub fn run<H: EventHandler<Context = GlContext> + 'static>(self, mut handler: H) {
-        let Platform { event_loop, mut state } = self;
+        let Platform { event_loop, gl_context } = self;
+        let mut gl_context = Some(gl_context);
+        let mut view: Option<View> = None;
 
-        state.resize();
-        handler.reconf(state.view_config(), &state.gl);
+        #[cfg(not(target_os = "android"))]
+        match View::try_init(gl_context.take().unwrap()) {
+            Ok(v) => {
+                view = v.into();
+            },
+            Err((c, e)) => {
+                println!("View init error: {}", e);
+                gl_context = c.into();
+            },
+        }
 
         event_loop.run(move |event, _, control_flow| {
-            state.handle(event, control_flow, &mut handler);
+            match event {
+                Event::EventsCleared => {
+                    // Application update code.
+
+                    // Queue a RedrawRequested event.
+                    if let Some(view) = &mut view {
+                        view.request_redraw();
+                    }
+                },
+                Event::LoopDestroyed => {
+                    handler.destroy();
+                },
+                Event::Suspended => {
+                    handler.suspend();
+                    if view.is_some() {
+                        gl_context = view.take().unwrap().teardown().into();
+                    }
+                },
+                Event::Resumed => {
+                    if view.is_none() {
+                        match View::try_init(gl_context.take().unwrap()) {
+                            Ok(v) => {
+                                view = v.into();
+                                handler.resume();
+                            },
+                            Err((c, e)) => {
+                                println!("View init error: {}", e);
+                                gl_context = c.into();
+                            },
+                        }
+                    }
+                },
+                Event::WindowEvent { event, .. } => {
+                    if let Some(view) = &mut view {
+                        view.handle(event, control_flow, &mut handler);
+                    }
+                },
+                // ControlFlow::Poll continuously runs the event loop, even if the OS hasn't
+                // dispatched any events. This is ideal for games and similar applications.
+                //_ => *control_flow = ControlFlow::Poll,
+                // ControlFlow::Wait pauses the event loop if no events are available to process.
+                // This is ideal for non-game applications that only update in response to user
+                // input, and uses significantly less power/CPU time than ControlFlow::Poll.
+                _ => *control_flow = ControlFlow::Wait,
+            }
         });
     }
 }
