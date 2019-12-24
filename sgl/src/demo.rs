@@ -1,4 +1,4 @@
-use super::{Result, GL, HasContext, ShaderType, Shader, Program, Uniform, Attribs, Buffer, Array, Draw, DrawMode, Attrib};
+use super::{Result, HasContext, ShaderType, Shader, Program, Uniform, Attribs, Buffer, Array, Draw, DrawMode, Attrib};
 
 pub struct Demo<G: HasContext> {
     program: Program<G>,
