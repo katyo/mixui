@@ -63,55 +63,59 @@ pub trait EventHandler {
     type Context: HasContext;
 
     /// Handle text input
-    fn input(&mut self, uchar: char);
+    fn input(&mut self, _uchar: char) {}
 
     /// Handle key state chane
-    fn key(&mut self, key: Key, state: bool);
+    fn key(&mut self, _key: Key, _state: bool) {}
 
     /// Handle pointer move
-    fn pointer(&mut self, x: f32, y: f32, dot_ratio: f32);
+    fn pointer(&mut self, _x: f32, _y: f32, _dot_ratio: f32) {}
 
     /// Handle button state change
-    fn button(&mut self, id: Button, state: bool);
+    fn button(&mut self, _id: Button, _state: bool) {}
 
     /// Handle scroll
-    fn scroll(&mut self, dx: f32, dy: f32, pixelwize: bool);
+    fn scroll(&mut self, _dx: f32, _dy: f32, _pixelwize: bool) {}
 
     /// Handle touch
-    fn touch(&mut self, x: f32, y: f32, phase: Phase);
+    fn touch(&mut self, _x: f32, _y: f32, _phase: Phase) {}
 
     /// Handle hover
-    fn hover(&mut self, state: bool);
+    fn hover(&mut self, _state: bool) {}
 
     /// Handle focus
-    fn focus(&mut self, state: bool);
+    fn focus(&mut self, _state: bool) {}
 
     /// Handle file over
-    fn file_over(&mut self, path: PathBuf);
+    fn file_over(&mut self, _path: PathBuf) {}
 
     /// Handle file out
-    fn file_out(&mut self);
+    fn file_out(&mut self) {}
 
     /// Handle file drop
-    fn file_drop(&mut self, path: PathBuf);
+    fn file_drop(&mut self, _path: PathBuf) {}
 
     /// Handle sizing
-    fn reconf(&mut self, conf: ViewConfig, gl: &Self::Context);
+    fn reconf(&mut self, _conf: ViewConfig, _gl: &Self::Context) {}
 
     /// Handle drawing
-    fn redraw(&mut self, gl: &Self::Context);
+    fn redraw(&mut self, _gl: &Self::Context) {}
 
     /// Destroy application
-    fn destroy(&mut self);
+    fn destroy(&mut self) {}
 
     /// Suspend application
-    fn suspend(&mut self);
+    fn suspend(&mut self) {}
 
     /// Resume application
-    fn resume(&mut self);
+    fn resume(&mut self) {}
 }
 
+/// Application config
 pub struct AppConfig {
+    /// Window title
     pub title: String,
+
+    /// Window icon
     pub icon: Option<Icon>,
 }

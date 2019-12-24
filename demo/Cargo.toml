@@ -1,0 +1,39 @@
+[package]
+name = "demo"
+version = "0.1.0"
+description = "Simple cross-platform OpenGL demo for testing purpose"
+authors = ["K. <kayo@illumium.org>"]
+edition = "2018"
+publish = false
+
+[dependencies.apl]
+version = "0.1.0"
+path = "../apl"
+
+[dependencies.sgl]
+version = "^0.1.0"
+path = "../sgl"
+
+[package.metadata.android]
+android_version = 28
+target_sdk_version = 28
+min_sdk_version = 16
+build_targets = [ "armv7-linux-androideabi", "aarch64-linux-android", "i686-linux-android", "x86_64-linux-android" ]
+#build_targets = ["armv7-linux-androideabi"]
+package_name = "org.illumium.rust-gles-demo"
+label = "Simple GLES demo"
+version_code = 100
+version_name = "0.1.0"
+#res = "res"
+#icon = "@mipmap/ic_launcher"
+fullscreen = false
+opengles_version_major = 2
+opengles_version_minor = 0
+
+[package.metadata.android.application_attributes]
+"android:debuggable" = "true"
+"android:hardwareAccelerated" = "true"
+
+[package.metadata.android.activity_attributes]
+"android:screenOrientation" = "unspecified"
+"android:uiOptions" = "none"
