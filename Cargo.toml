@@ -1,0 +1,7 @@
+[workspace]
+members = [
+  "apl",
+  "sgl",
+  "demo",
+  "pianino",
+]
