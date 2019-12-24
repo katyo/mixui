@@ -2,7 +2,7 @@ use winit::{
     event::{
         Event, WindowEvent, ElementState,
         KeyboardInput as KeyboardInputEvent,
-        MouseScrollDelta, Touch as TouchEvent
+        MouseScrollDelta, Touch as TouchEvent,
     },
     event_loop::{ControlFlow, EventLoop},
     window::{WindowBuilder, Window},
@@ -107,14 +107,6 @@ impl View {
         unsafe { self.gl.viewport(0, 0, self.gl_size.0, self.gl_size.1); }
     }
 
-    /*fn suspend(&mut self) {
-        self.gl_context = self.gl_context.take().map(|gl_context| unsafe { gl_context.make_not_current().unwrap().treat_as_current() });
-    }
-
-    fn resume(&mut self) {
-        self.gl_context = self.gl_context.take().map(|gl_context| unsafe { gl_context.treat_as_not_current().make_current().unwrap() });
-    }*/
-
     fn request_redraw(&self) {
         self.gl_context.as_ref().unwrap().window().request_redraw();
     }
@@ -137,29 +129,24 @@ impl View {
         )
     }
 
+    fn redraw<H>(&mut self, handler: &mut H)
+    where
+        H: EventHandler<Context = GlContext>
+    {
+        handler.redraw(&self.gl);
+        self.gl_context.as_ref().unwrap().swap_buffers().unwrap();
+    }
+
     fn handle<H: EventHandler<Context = GlContext>>(&mut self, event: WindowEvent, control_flow: &mut ControlFlow, handler: &mut H) {
         use self::WindowEvent::*;
         match event {
-            RedrawRequested => {
-                // Redraw the application.
-                //
-                // It's preferrable to render in this event rather than in EventsCleared, since
-                // rendering in here allows the program to gracefully handle redraws requested
-                // by the OS.
-
-                handler.redraw(&self.gl);
-                self.gl_context.as_ref().unwrap().swap_buffers().unwrap();
-            },
             CloseRequested => {
                 println!("The close button was pressed; stopping");
                 *control_flow = ControlFlow::Exit;
             },
             Resized(inner_size) => {
-                if inner_size.width > 0.0 && inner_size.height > 0.0 {
-                    self.view_size = inner_size.to_physical(self.dot_ratio);
-                    //sleep(Duration::from_millis(250));
-                    self.resize();
-                }
+                self.view_size = inner_size.to_physical(self.dot_ratio);
+                self.resize();
                 handler.reconf(self.view_config(), &self.gl);
             },
             HiDpiFactorChanged(dot_ratio) => {
@@ -257,7 +244,10 @@ impl Platform {
         Self { event_loop, gl_context }
     }
 
-    pub fn run<H: EventHandler<Context = GlContext> + 'static>(self, mut handler: H) {
+    pub fn run<H>(self, mut handler: H)
+    where
+        H: EventHandler<Context = GlContext> + 'static,
+    {
         let Platform { event_loop, gl_context } = self;
         let mut gl_context = Some(gl_context);
         let mut view: Option<View> = None;
@@ -274,25 +264,33 @@ impl Platform {
         }
 
         event_loop.run(move |event, _, control_flow| {
+            use self::Event::*;
             match event {
-                Event::EventsCleared => {
-                    // Application update code.
-
-                    // Queue a RedrawRequested event.
+                RedrawRequested(_window_id) => {
+                    // Redraw the application.
+                    //
+                    // It's preferrable to render in this event rather than in EventsCleared, since
+                    // rendering in here allows the program to gracefully handle redraws requested
+                    // by the OS.
+                    if let Some(view) = &mut view {
+                        view.redraw(&mut handler);
+                    }
+                },
+                RedrawEventsCleared => {
                     if let Some(view) = &mut view {
                         view.request_redraw();
                     }
                 },
-                Event::LoopDestroyed => {
+                LoopDestroyed => {
                     handler.destroy();
                 },
-                Event::Suspended => {
+                Suspended => {
                     handler.suspend();
                     if view.is_some() {
                         gl_context = view.take().unwrap().teardown().into();
                     }
                 },
-                Event::Resumed => {
+                Resumed => {
                     if view.is_none() {
                         match View::try_init(gl_context.take().unwrap()) {
                             Ok(v) => {
@@ -306,7 +304,7 @@ impl Platform {
                         }
                     }
                 },
-                Event::WindowEvent { event, .. } => {
+                WindowEvent { event, .. } => {
                     if let Some(view) = &mut view {
                         view.handle(event, control_flow, &mut handler);
                     }
