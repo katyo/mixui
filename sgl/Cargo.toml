@@ -1,0 +1,17 @@
+[package]
+name = "sgl"
+version = "0.1.0"
+description = "Safe thin OpenGL layer"
+keywords = ["GPU", "OpenGL", "Graphics", "3D", "Wrapper", "Safe"]
+categories = ["graphics", "rendering", "rendering::graphics-api", "wasm"]
+authors = ["K. <kayo@illumium.org>"]
+license = "MIT"
+edition = "2018"
+
+[dependencies]
+glow = "^0.4.0"
+
+[features]
+default = ["web-sys"]
+stdweb = ["glow/stdweb"]
+web-sys = ["glow/web-sys"]

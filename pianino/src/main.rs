@@ -1,15 +1,10 @@
-mod platform;
-mod sgl;
-
 use std::{
     env::set_var,
     path::PathBuf
 };
 
-use platform::{Key, Button, Phase, EventHandler, Platform, ViewConfig};
-
-use sgl::{GL, HasContext, demo::Demo};
-use glow::{Context};
+use apl::{Key, Button, Phase, EventHandler, Platform, ViewConfig, AppConfig, Icon};
+use sgl::{GL, HasContext, Context, demo::Demo};
 
 pub struct Application<G: HasContext> {
     text: String,
@@ -112,7 +107,17 @@ impl<G: HasContext> EventHandler for Application<G> {
 fn main() {
     set_var("RUST_BACKTRACE", "1");
 
-    let platform = Platform::new();
+    let config = AppConfig {
+        title: "Pianino".into(),
+        icon: Icon::from_rgba(
+            include_bytes!("icon.rgba")
+                .as_ref().into(),
+            64, 64
+        ).ok(),
+    };
+
+    let platform = Platform::new(config);
+
     let application = Application::<Context>::new();
 
     platform.run(application);

@@ -10,7 +10,7 @@ use winit::{
         MouseScrollDelta, Touch as TouchEvent
     },
     event_loop::{ControlFlow, EventLoop},
-    window::{Icon, WindowBuilder, Window},
+    window::{WindowBuilder, Window},
 };
 
 use glutin::{
@@ -18,14 +18,14 @@ use glutin::{
     ContextWrapper,
     PossiblyCurrent,
     GlRequest, Api,
-    GlProfile,
+    //GlProfile,
     PixelFormat,
     dpi::PhysicalSize,
 };
 
-use crate::sgl::{GL, HasContext, Context as GlContext};
+use sgl::{GL, HasContext, Context as GlContext};
 
-use super::{Key, EventHandler, ViewConfig};
+use super::{Key, EventHandler, ViewConfig, AppConfig};
 
 pub struct Platform {
     event_loop: EventLoop<()>,
@@ -45,26 +45,20 @@ struct State {
 }
 
 impl State {
-    fn new(event_loop: &EventLoop<()>) -> Self {
-        let icon = Icon::from_rgba(
-            include_bytes!("../icon.rgba")
-                .as_ref().into(),
-            64, 64
-        ).ok();
-
+    fn new(event_loop: &EventLoop<()>, config: AppConfig) -> Self {
         let window_builder = WindowBuilder::new()
-            .with_title("Pianino")
+            .with_title(config.title)
             .with_visible(true)
             .with_decorations(true)
             .with_resizable(true)
-            .with_window_icon(icon);
+            .with_window_icon(config.icon);
 
         let gl_context = ContextBuilder::new()
             .with_gl(/*GlRequest::GlThenGles {
                 opengl_version: (2, 0),
                 opengles_version: (2, 0)
             }*/GlRequest::Specific(Api::OpenGlEs, (2, 0)))
-            //.with_vsync(true)
+            .with_vsync(true)
             //.with_gl_profile(GlProfile::Core)
             //.with_pixel_format(24, 8)
             //.with_stencil_buffer(8)
@@ -84,7 +78,7 @@ impl State {
 
         let gl_context = unsafe { gl_context.make_current().unwrap() };
 
-        let gl = glow::Context::from_loader_function(
+        let gl = GlContext::from_loader_function(
             |proc_name| gl_context.get_proc_address(proc_name)
         );
 
@@ -281,9 +275,9 @@ impl State {
 }
 
 impl Platform {
-    pub fn new() -> Self {
+    pub fn new(config: AppConfig) -> Self {
         let event_loop = EventLoop::new();
-        let state = State::new(&event_loop);
+        let state = State::new(&event_loop, config);
 
         Self {
             event_loop,

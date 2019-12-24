@@ -3,32 +3,32 @@ use super::{HasContext};
 
 /// Uniform location binding
 pub struct Uniform<G: HasContext, T> {
-    pub(super) location: Option<G::UniformLocation>,
+    pub(super) location: G::UniformLocation,
     _type: PhantomData<T>,
 }
 
 impl<G: HasContext, T: AsUniform<G>> Uniform<G, T> {
     pub(super) fn new(location: G::UniformLocation) -> Self {
-        Self { location: Some(location), _type: PhantomData }
+        Self { location: location, _type: PhantomData }
     }
 
     /// Load data to uniform location
     pub fn load(&self, gl: &G, data: T) {
-        data.uniform_load(gl, self.location);
+        data.uniform_load(gl, &self.location);
     }
 }
 
 /// The trait for types which can be used as a uniform data
 pub trait AsUniform<G: HasContext> {
-    fn uniform_load(self, gl: &G, location: Option<G::UniformLocation>);
+    fn uniform_load(self, gl: &G, location: &G::UniformLocation);
 }
 
 macro_rules! as_uniform_impls {
     ($($type: ty, $func: ident;)*) => {
         $(
             impl<G: HasContext> AsUniform<G> for $type {
-                fn uniform_load(self, gl: &G, location: Option<G::UniformLocation>) {
-                    unsafe { gl.$func(location, self); }
+                fn uniform_load(self, gl: &G, location: &G::UniformLocation) {
+                    unsafe { gl.$func(Some(location.clone()), self); }
                 }
             }
         )*
@@ -44,8 +44,8 @@ macro_rules! as_uniform_impls_tuple {
     ($($type: ty, $func: ident, ($($arg: tt),+);)*) => {
         $(
             impl<G: HasContext> AsUniform<G> for $type {
-                fn uniform_load(self, gl: &G, location: Option<G::UniformLocation>) {
-                    unsafe { gl.$func(location, $(self.$arg),+); }
+                fn uniform_load(self, gl: &G, location: &G::UniformLocation) {
+                    unsafe { gl.$func(Some(location.clone()), $(self.$arg),+); }
                 }
             }
         )*
@@ -65,8 +65,8 @@ macro_rules! as_uniform_impls_array_ref {
     ($($type: ty, $func: ident, $size: tt;)*) => {
         $(
             impl<G: HasContext> AsUniform<G> for &[$type; $size] {
-                fn uniform_load(self, gl: &G, location: Option<G::UniformLocation>) {
-                    unsafe { gl.$func(location, self); }
+                fn uniform_load(self, gl: &G, location: &G::UniformLocation) {
+                    unsafe { gl.$func(Some(location.clone()), self); }
                 }
             }
         )*
@@ -88,8 +88,8 @@ macro_rules! as_uniform_impls_mat_array_ref {
     ($($type: ty, $func: ident, $size: tt;)*) => {
         $(
             impl<G: HasContext> AsUniform<G> for (bool, &[$type; $size]) {
-                fn uniform_load(self, gl: &G, location: Option<G::UniformLocation>) {
-                    unsafe { gl.$func(location, self.0, self.1); }
+                fn uniform_load(self, gl: &G, location: &G::UniformLocation) {
+                    unsafe { gl.$func(Some(location.clone()), self.0, self.1); }
                 }
             }
         )*

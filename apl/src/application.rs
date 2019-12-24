@@ -1,12 +1,15 @@
 use std::path::PathBuf;
 
-pub use winit::event::{
-    VirtualKeyCode as Key,
-    MouseButton as Button,
-    TouchPhase as Phase,
+pub use winit::{
+    event::{
+        VirtualKeyCode as Key,
+        MouseButton as Button,
+        TouchPhase as Phase,
+    },
+    window::Icon,
 };
 
-pub use crate::sgl::{HasContext};
+pub use sgl::{HasContext};
 
 /// Keyboard key name
 /*
@@ -14,7 +17,7 @@ pub enum KeyCode {
     A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
     Zero, One, Two, Three, Four, Five, Six, Seven, Eight, Nine,
 }
-*/
+ */
 
 #[derive(Debug, Clone, Copy)]
 pub struct ViewConfig {
@@ -106,4 +109,9 @@ pub trait EventHandler {
 
     /// Resume application
     fn resume(&mut self);
+}
+
+pub struct AppConfig {
+    pub title: String,
+    pub icon: Option<Icon>,
 }

@@ -1,0 +1,27 @@
+[package]
+name = "apl"
+version = "0.1.0"
+description = "Application platform layer"
+authors = ["K. <kayo@illumium.org>"]
+license = "MIT"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["winit-glutin"]
+winit-glutin = ["winit", "glutin"]
+
+[dependencies.sgl]
+version = "0.1.0"
+path = "../sgl"
+
+[dependencies.winit]
+optional = true
+git = "https://github.com/katyo/winit"
+branch = "android"
+
+[dependencies.glutin]
+optional = true
+git = "https://github.com/katyo/glutin"
+branch = "android"
