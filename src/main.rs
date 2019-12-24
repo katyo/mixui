@@ -1,7 +1,10 @@
 mod platform;
 mod sgl;
 
-use std::path::PathBuf;
+use std::{
+    env::set_var,
+    path::PathBuf
+};
 
 use platform::{Key, Button, Phase, EventHandler, Platform, ViewConfig};
 
@@ -86,6 +89,8 @@ impl<G: HasContext> EventHandler for Application<G> {
 
     fn redraw(&mut self, gl: &G) {
         //println!("redraw");
+        unsafe { gl.clear(GL::COLOR_BUFFER_BIT | GL::STENCIL_BUFFER_BIT); }
+
         if let Some(demo) = &self.demo {
             demo.render(gl);
         }
@@ -105,6 +110,8 @@ impl<G: HasContext> EventHandler for Application<G> {
 }
 
 fn main() {
+    set_var("RUST_BACKTRACE", "1");
+
     let platform = Platform::new();
     let application = Application::<Context>::new();
 

@@ -1,3 +1,8 @@
+use std::{
+    time::Duration,
+    thread::sleep
+};
+
 use winit::{
     event::{
         Event, WindowEvent, ElementState,
@@ -28,12 +33,15 @@ pub struct Platform {
 }
 
 struct State {
-    gl_context: ContextWrapper<PossiblyCurrent, Window>,
-    pixel_format: PixelFormat,
     dot_ratio: f64,
     view_size: PhysicalSize,
+
+    gl_context: Option<ContextWrapper<PossiblyCurrent, Window>>,
+    pixel_format: PixelFormat,
     gl_size: (i32, i32),
     gl: GlContext,
+
+    visible: bool,
 }
 
 impl State {
@@ -56,15 +64,23 @@ impl State {
                 opengl_version: (2, 0),
                 opengles_version: (2, 0)
             }*/GlRequest::Specific(Api::OpenGlEs, (2, 0)))
-            .with_vsync(true)
-            .with_gl_profile(GlProfile::Core)
-            .with_pixel_format(24, 8)
-            .with_stencil_buffer(8)
-            .with_depth_buffer(0)
+            //.with_vsync(true)
+            //.with_gl_profile(GlProfile::Core)
+            //.with_pixel_format(24, 8)
+            //.with_stencil_buffer(8)
+            //.with_depth_buffer(0)
             //.with_double_buffer(Some(true))
-            .with_multisampling(0)
+            //.with_multisampling(0)
             .build_windowed(window_builder, &event_loop)
             .unwrap();
+
+        let (dot_ratio, view_size, gl_size) = {
+            let window = gl_context.window();
+            let dot_ratio = window.hidpi_factor();
+            let view_size = window.inner_size().to_physical(dot_ratio);
+            let gl_size = (view_size.width as i32, view_size.height as i32);
+            (dot_ratio, view_size, gl_size)
+        };
 
         let gl_context = unsafe { gl_context.make_current().unwrap() };
 
@@ -103,28 +119,25 @@ impl State {
             gl.stencil_mask(0xffffffff);
         }
 
-        let (dot_ratio, view_size, gl_size) = {
-            let window = gl_context.window();
-            let dot_ratio = window.hidpi_factor();
-            let view_size = window.inner_size().to_physical(dot_ratio);
-            let gl_size = (view_size.width as i32, view_size.height as i32);
-            (dot_ratio, view_size, gl_size)
-        };
+        let gl_context = Some(gl_context);
 
         Self {
-            gl_context,
-            pixel_format,
             dot_ratio,
             view_size,
+
+            gl_context,
+            pixel_format,
             gl_size,
             gl,
+
+            visible: true,
         }
     }
 
     fn resize(&mut self) {
         self.gl_size = (self.view_size.width as i32,
                         self.view_size.height as i32);
-        self.gl_context.resize(self.view_size);
+        self.gl_context.as_ref().unwrap().resize(self.view_size);
         unsafe { self.gl.viewport(0, 0, self.gl_size.0, self.gl_size.1); }
     }
 
@@ -152,15 +165,20 @@ impl State {
                 // Application update code.
 
                 // Queue a RedrawRequested event.
-                self.gl_context.window().request_redraw();
+                if self.visible {
+                    self.gl_context.as_ref().unwrap().window().request_redraw();
+                }
             },
             Event::LoopDestroyed => {
                 handler.destroy();
             },
             Event::Suspended => {
                 handler.suspend();
+                self.visible = false;
             },
             Event::Resumed => {
+                self.visible = true;
+                self.gl_context = self.gl_context.take().map(|gl_context| unsafe { gl_context.treat_as_not_current().make_current().unwrap() });
                 handler.resume();
             },
             Event::WindowEvent { event, .. } => {
@@ -173,27 +191,32 @@ impl State {
                         // rendering in here allows the program to gracefully handle redraws requested
                         // by the OS.
 
-                        unsafe { self.gl.clear(GL::COLOR_BUFFER_BIT | GL::STENCIL_BUFFER_BIT); }
-
-                        //handler.draw(view_size.width as f32, view_size.height as f32, dot_ratio as f32);
-                        handler.redraw(&self.gl);
-
-                        self.gl_context.swap_buffers().unwrap();
+                        if self.visible {
+                            handler.redraw(&self.gl);
+                            self.gl_context.as_ref().unwrap().swap_buffers().unwrap();
+                        }
                     },
                     CloseRequested => {
                         println!("The close button was pressed; stopping");
                         *control_flow = ControlFlow::Exit;
                     },
                     Resized(inner_size) => {
-                        self.view_size = inner_size.to_physical(self.dot_ratio);
-                        self.resize();
-                        handler.reconf(self.view_config(), &self.gl);
+                        if self.visible && inner_size.width > 0.0 && inner_size.height > 0.0 {
+                            self.view_size = inner_size.to_physical(self.dot_ratio);
+                            //sleep(Duration::from_millis(250));
+                            self.resize();
+                            handler.reconf(self.view_config(), &self.gl);
+                        }
                     },
-                    HiDpiFactorChanged(hidpi_factor) => {
-                        self.dot_ratio = hidpi_factor;
-                        self.view_size = self.gl_context.window().inner_size().to_physical(self.dot_ratio);
-                        self.resize();
-                        handler.reconf(self.view_config(), &self.gl);
+                    HiDpiFactorChanged(dot_ratio) => {
+                        if self.visible {
+                            let size = self.gl_context.as_ref().unwrap().window().inner_size();
+                            self.view_size = size.to_physical(dot_ratio);
+                            self.dot_ratio = dot_ratio;
+                            //sleep(Duration::from_millis(250));
+                            self.resize();
+                            handler.reconf(self.view_config(), &self.gl);
+                        }
                     },
                     ReceivedCharacter(uchar) => {
                         handler.input(uchar);
