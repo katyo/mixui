@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {} }:
 with pkgs;
 stdenv.mkDerivation rec {
-  name = "pianino";
+  name = "mixui-app";
 
   LD_LIBRARY_PATH = "${libglvnd}/lib:${stdenv.cc.cc.lib}/lib";
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";

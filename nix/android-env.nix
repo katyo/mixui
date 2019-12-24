@@ -13,7 +13,6 @@ let
     includeSystemImages = false;
     systemImageTypes = [ "default" ];
     abiVersions = [ "x86" "x86_64" "armeabi-v7a" "arm64-v8a" ];
-    #lldbVersions = [ "3.1.4508709" ];
     cmakeVersions = [ "3.10.2" ];
     includeNDK = true;
     ndkVersion = "18.1.5063045";
@@ -26,21 +25,13 @@ let
   android-ndk = androidComposition.ndk-bundle;
   android-sdk = androidComposition.androidsdk;
 in stdenv.mkDerivation rec {
-  name = "pianino";
+  name = "mixui-app";
 
-  #ANDROID_SDK_HOME = "${android-sdk}/libexec/android-sdk";
-  #NDK_HOME = "${android-ndk}/libexec/android-sdk/ndk-bundle";
-
-  ANDROID_HOME = "/home/kayo/.androidenv";
-  NDK_HOME = "${ANDROID_HOME}/ndk/20.1.5948944";
-
-  LD_LIBRARY_PATH = "${zlib}/lib";
+  ANDROID_SDK_HOME = "${android-sdk}/libexec/android-sdk";
+  NDK_HOME = "${android-ndk}/libexec/android-sdk/ndk-bundle";
 
   buildInputs = [
-    #stdenv
-    #pkgconfig
-    zlib
-    #android-sdk
-    #android-ndk
+    android-sdk
+    android-ndk
   ];
 }
