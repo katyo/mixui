@@ -26,7 +26,7 @@ use super::{Key, EventHandler, ViewConfig, AppConfig};
 
 struct View {
     dot_ratio: f64,
-    view_size: PhysicalSize,
+    view_size: PhysicalSize<u32>,
 
     gl_context: Option<ContextWrapper<PossiblyCurrent, Window>>,
     pixel_format: PixelFormat,
@@ -75,8 +75,8 @@ impl View {
 
         let (dot_ratio, view_size, gl_size) = {
             let window = gl_context.window();
-            let dot_ratio = window.hidpi_factor();
-            let view_size = window.inner_size().to_physical(dot_ratio);
+            let dot_ratio = window.scale_factor();
+            let view_size = window.inner_size();
             let gl_size = (view_size.width as i32, view_size.height as i32);
             (dot_ratio, view_size, gl_size)
         };
@@ -145,14 +145,13 @@ impl View {
                 *control_flow = ControlFlow::Exit;
             },
             Resized(inner_size) => {
-                self.view_size = inner_size.to_physical(self.dot_ratio);
+                self.view_size = inner_size;
                 self.resize();
                 handler.reconf(self.view_config(), &self.gl);
             },
-            HiDpiFactorChanged(dot_ratio) => {
-                let size = self.gl_context.as_ref().unwrap().window().inner_size();
-                self.view_size = size.to_physical(dot_ratio);
-                self.dot_ratio = dot_ratio;
+            ScaleFactorChanged { scale_factor, new_inner_size } => {
+                self.view_size = *new_inner_size;
+                self.dot_ratio = scale_factor;
                 self.resize();
                 handler.reconf(self.view_config(), &self.gl);
             },

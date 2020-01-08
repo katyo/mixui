@@ -18,10 +18,8 @@ path = "../sgl"
 
 [dependencies.winit]
 optional = true
-git = "https://github.com/katyo/winit"
-branch = "android"
+git = "https://github.com/rust-windowing/winit"
 
 [dependencies.glutin]
 optional = true
-git = "https://github.com/katyo/glutin"
-branch = "android"
+git = "https://github.com/rust-windowing/glutin"
