@@ -1,6 +1,15 @@
 use core::marker::PhantomData;
 use super::{HasContext};
 
+#[cfg(feature = "glam")]
+mod glam_impls;
+
+#[cfg(feature = "stretch")]
+mod stretch_impls;
+
+#[cfg(feature = "colours")]
+mod colours_impls;
+
 /// Uniform location binding
 pub struct Uniform<G: HasContext, T> {
     pub(super) location: G::UniformLocation,
@@ -13,22 +22,24 @@ impl<G: HasContext, T: AsUniform<G>> Uniform<G, T> {
     }
 
     /// Load data to uniform location
-    pub fn load(&self, gl: &G, data: T) {
-        data.uniform_load(gl, &self.location);
+    pub fn load(&self, gl: &G, data: T::Type) {
+        T::uniform_load(gl, &self.location, data);
     }
 }
 
 /// The trait for types which can be used as a uniform data
 pub trait AsUniform<G: HasContext> {
-    fn uniform_load(self, gl: &G, location: &G::UniformLocation);
+    type Type;
+    fn uniform_load(gl: &G, location: &G::UniformLocation, data: Self::Type);
 }
 
 macro_rules! as_uniform_impls {
     ($($type: ty, $func: ident;)*) => {
         $(
             impl<G: HasContext> AsUniform<G> for $type {
-                fn uniform_load(self, gl: &G, location: &G::UniformLocation) {
-                    unsafe { gl.$func(Some(location.clone()), self); }
+                type Type = Self;
+                fn uniform_load(gl: &G, location: &G::UniformLocation, data: Self::Type) {
+                    unsafe { gl.$func(Some(location.clone()), data); }
                 }
             }
         )*
@@ -43,9 +54,16 @@ as_uniform_impls! {
 macro_rules! as_uniform_impls_tuple {
     ($($type: ty, $func: ident, ($($arg: tt),+);)*) => {
         $(
+            impl<G: HasContext> AsUniform<G> for &$type {
+                type Type = Self;
+                fn uniform_load(gl: &G, location: &G::UniformLocation, data: Self::Type) {
+                    unsafe { gl.$func(Some(location.clone()), $(data.$arg),+); }
+                }
+            }
             impl<G: HasContext> AsUniform<G> for $type {
-                fn uniform_load(self, gl: &G, location: &G::UniformLocation) {
-                    unsafe { gl.$func(Some(location.clone()), $(self.$arg),+); }
+                type Type = Self;
+                fn uniform_load(gl: &G, location: &G::UniformLocation, data: Self::Type) {
+                    unsafe { gl.$func(Some(location.clone()), $(data.$arg),+); }
                 }
             }
         )*
@@ -65,8 +83,15 @@ macro_rules! as_uniform_impls_array_ref {
     ($($type: ty, $func: ident, $size: tt;)*) => {
         $(
             impl<G: HasContext> AsUniform<G> for &[$type; $size] {
-                fn uniform_load(self, gl: &G, location: &G::UniformLocation) {
-                    unsafe { gl.$func(Some(location.clone()), self); }
+                type Type = Self;
+                fn uniform_load(gl: &G, location: &G::UniformLocation, data: Self::Type) {
+                    unsafe { gl.$func(Some(location.clone()), data); }
+                }
+            }
+            impl<G: HasContext> AsUniform<G> for [$type; $size] {
+                type Type = Self;
+                fn uniform_load(gl: &G, location: &G::UniformLocation, data: Self::Type) {
+                    unsafe { gl.$func(Some(location.clone()), &data); }
                 }
             }
         )*
@@ -84,12 +109,16 @@ as_uniform_impls_array_ref! {
     i32, uniform_4_i32_slice, 4;
 }
 
+pub struct Direct<T>(T);
+pub struct Transposed<T>(T);
+
 macro_rules! as_uniform_impls_mat_array_ref {
-    ($($type: ty, $func: ident, $size: tt;)*) => {
+    ($($conv:tt, $tran:tt, $type: ty, $func: ident, $size: tt;)*) => {
         $(
-            impl<G: HasContext> AsUniform<G> for (bool, &[$type; $size]) {
-                fn uniform_load(self, gl: &G, location: &G::UniformLocation) {
-                    unsafe { gl.$func(Some(location.clone()), self.0, self.1); }
+            impl<'a, G: HasContext> AsUniform<G> for $conv<&'a [$type; $size]> {
+                type Type = &'a [$type; $size];
+                fn uniform_load(gl: &G, location: &G::UniformLocation, data: Self::Type) {
+                    unsafe { gl.$func(Some(location.clone()), $tran, data); }
                 }
             }
         )*
@@ -97,7 +126,10 @@ macro_rules! as_uniform_impls_mat_array_ref {
 }
 
 as_uniform_impls_mat_array_ref! {
-    f32, uniform_matrix_2_f32_slice, 4;
-    f32, uniform_matrix_3_f32_slice, 9;
-    f32, uniform_matrix_4_f32_slice, 16;
+    Direct, false, f32, uniform_matrix_2_f32_slice, 4;
+    Direct, false, f32, uniform_matrix_3_f32_slice, 9;
+    Direct, false, f32, uniform_matrix_4_f32_slice, 16;
+    Transposed, true, f32, uniform_matrix_2_f32_slice, 4;
+    Transposed, true, f32, uniform_matrix_3_f32_slice, 9;
+    Transposed, true, f32, uniform_matrix_4_f32_slice, 16;
 }

@@ -4,6 +4,15 @@ use core::{
 };
 use super::{Result, GL, HasContext, Buffer, Array};
 
+#[cfg(feature = "glam")]
+mod glam_impls;
+
+#[cfg(feature = "stretch")]
+mod stretch_impls;
+
+#[cfg(feature = "colours")]
+mod colours_impls;
+
 /// Attribute location binding
 pub struct Attrib<G: HasContext, T: AsAttrib<G>> {
     pub(super) attrib: u32,
