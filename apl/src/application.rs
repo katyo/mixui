@@ -29,7 +29,7 @@ pub struct ViewConfig {
     pub num_samples: u8,
     pub view_width: f32,
     pub view_height: f32,
-    pub dot_ratio: f32,
+    pub dot_scale: f32,
 }
 
 impl ViewConfig {
@@ -42,7 +42,7 @@ impl ViewConfig {
         num_samples: u8,
         view_width: f32,
         view_height: f32,
-        dot_ratio: f32,
+        dot_scale: f32,
     ) -> Self {
         Self {
             color_bits,
@@ -53,7 +53,7 @@ impl ViewConfig {
             num_samples,
             view_width,
             view_height,
-            dot_ratio,
+            dot_scale,
         }
     }
 }
@@ -69,7 +69,7 @@ pub trait EventHandler {
     fn key(&mut self, _key: Key, _state: bool) {}
 
     /// Handle pointer move
-    fn pointer(&mut self, _x: f32, _y: f32, _dot_ratio: f32) {}
+    fn pointer(&mut self, _x: f32, _y: f32) {}
 
     /// Handle button state change
     fn button(&mut self, _id: Button, _state: bool) {}

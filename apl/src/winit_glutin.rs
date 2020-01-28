@@ -15,9 +15,8 @@ use glutin::{
     NotCurrent,
     PossiblyCurrent,
     GlRequest, Api,
-    //GlProfile,
     PixelFormat,
-    dpi::PhysicalSize,
+    dpi::LogicalSize,
 };
 
 use sgl::{GL, HasContext, Context as GlContext};
@@ -25,8 +24,8 @@ use sgl::{GL, HasContext, Context as GlContext};
 use super::{Key, EventHandler, ViewConfig, AppConfig};
 
 struct View {
-    dot_ratio: f64,
-    view_size: PhysicalSize<u32>,
+    dot_scale: f64,
+    view_size: LogicalSize<f32>,
 
     gl_context: Option<ContextWrapper<PossiblyCurrent, Window>>,
     pixel_format: PixelFormat,
@@ -73,20 +72,20 @@ impl View {
             gl.stencil_mask(0xffffffff);
         }
 
-        let (dot_ratio, view_size, gl_size) = {
+        let (dot_scale, view_size, gl_size) = {
             let window = gl_context.window();
-            let dot_ratio = window.scale_factor();
-            let view_size = window.inner_size();
+            let dot_scale = window.scale_factor();
+            let view_size = window.inner_size().to_logical(dot_scale);
             let gl_size = (view_size.width as i32, view_size.height as i32);
-            (dot_ratio, view_size, gl_size)
+            (dot_scale, view_size, gl_size)
         };
 
-        println!("View scale: {} size: {:?}", dot_ratio, gl_size);
+        println!("Dot scale: {} View size: {:?}", dot_scale, gl_size);
 
         let gl_context = Some(gl_context);
 
         Ok(Self {
-            dot_ratio,
+            dot_scale,
             view_size,
 
             gl_context,
@@ -101,10 +100,18 @@ impl View {
     }
 
     fn resize(&mut self) {
-        self.gl_size = (self.view_size.width as i32,
-                        self.view_size.height as i32);
-        self.gl_context.as_ref().unwrap().resize(self.view_size);
-        unsafe { self.gl.viewport(0, 0, self.gl_size.0, self.gl_size.1); }
+        let window = self.gl_context.as_ref().unwrap().window();
+        let size = window.inner_size();
+
+        self.view_size = size.to_logical(self.dot_scale);
+        let gl_pos = (
+            0 as i32,
+            0 as i32,
+        );
+        self.gl_size = (size.width as i32,
+                        size.height as i32);
+        self.gl_context.as_ref().unwrap().resize(size);
+        unsafe { self.gl.viewport(gl_pos.0, gl_pos.1, self.gl_size.0, self.gl_size.1); }
     }
 
     fn request_redraw(&self) {
@@ -123,9 +130,9 @@ impl View {
             pixel_format.multisampling
                 .map(|samples| samples as u8)
                 .unwrap_or(1),
-            self.view_size.width as f32,
-            self.view_size.height as f32,
-            self.dot_ratio as f32,
+            self.view_size.width,
+            self.view_size.height,
+            self.dot_scale as f32,
         )
     }
 
@@ -144,14 +151,12 @@ impl View {
                 println!("The close button was pressed; stopping");
                 *control_flow = ControlFlow::Exit;
             },
-            Resized(inner_size) => {
-                self.view_size = inner_size;
+            Resized(..) => {
                 self.resize();
                 handler.reconf(self.view_config(), &self.gl);
             },
-            ScaleFactorChanged { scale_factor, new_inner_size } => {
-                self.view_size = *new_inner_size;
-                self.dot_ratio = scale_factor;
+            ScaleFactorChanged { scale_factor, .. } => {
+                self.dot_scale = scale_factor;
                 self.resize();
                 handler.reconf(self.view_config(), &self.gl);
             },
@@ -169,7 +174,8 @@ impl View {
                 }
             },
             CursorMoved { position, .. } => {
-                handler.pointer(position.x as f32, position.y as f32, self.dot_ratio as f32);
+                let position = position.to_logical(self.dot_scale);
+                handler.pointer(position.x, position.y);
             },
             MouseInput { button, state, .. } => {
                 handler.button(button, state == ElementState::Pressed);
