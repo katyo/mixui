@@ -15,28 +15,34 @@ mod colours_impls;
 
 /// Attribute location binding
 pub struct Attrib<G: HasContext, T: AsAttrib<G>> {
-    pub(super) attrib: u32,
+    pub(super) attrib: Option<u32>,
     _gl: PhantomData<(G, T)>,
 }
 
 impl<G: HasContext, T: AsAttrib<G>> Attrib<G, T> {
-    pub(super) fn new(attrib: u32) -> Self {
+    pub(super) fn new(attrib: Option<u32>) -> Self {
         Self { attrib, _gl: PhantomData }
     }
 
     /// Enable attribute
     fn enable_attrib(&self, gl: &G) {
-        unsafe { gl.enable_vertex_attrib_array(self.attrib); }
+        if let Some(attrib) = &self.attrib {
+            unsafe { gl.enable_vertex_attrib_array(*attrib); }
+        }
     }
 
     /// Disable attribute
     fn disable_attrib(&self, gl: &G) {
-        unsafe { gl.disable_vertex_attrib_array(self.attrib); }
+        if let Some(attrib) = &self.attrib {
+            unsafe { gl.disable_vertex_attrib_array(*attrib); }
+        }
     }
 
     /// Setup attribute pointer
     pub fn pointer(&self, gl: &G, offset: i32, stride: i32) {
-        T::attrib_pointer(gl, self.attrib, offset, stride);
+        if let Some(attrib) = &self.attrib {
+            T::attrib_pointer(gl, *attrib, offset, stride);
+        }
     }
 }
 

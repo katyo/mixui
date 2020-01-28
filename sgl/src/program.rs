@@ -84,17 +84,25 @@ impl<G: HasContext> Program<G> {
         unsafe { gl.use_program(None); }
     }
 
-    pub fn uniform<T: AsUniform<G>, S: AsRef<str>>(&self, gl: &G, name: S) -> Result<Uniform<G, T>> {
+    pub fn uniform<T: AsUniform<G>, S: AsRef<str>>(&self, gl: &G, name: S) -> Uniform<G, T> {
         let name = name.as_ref();
-        unsafe { gl.get_uniform_location(self.program, name) }
-        .map(Uniform::new)
-            .ok_or_else(|| format!("No uniform `{}` found", name))
+        let location = unsafe { gl.get_uniform_location(self.program, name) };
+
+        if location.is_none() {
+            eprintln!("No uniform `{}` found", name);
+        }
+
+        Uniform::new(location)
     }
 
-    pub fn attrib<T: AsAttrib<G>, S: AsRef<str>>(&self, gl: &G, name: S) -> Result<Attrib<G, T>> {
+    pub fn attrib<T: AsAttrib<G>, S: AsRef<str>>(&self, gl: &G, name: S) -> Attrib<G, T> {
         let name = name.as_ref();
-        unsafe { gl.get_attrib_location(self.program, name) }
-        .map(Attrib::new)
-            .ok_or_else(|| format!("No attribute `{}` found", name))
+        let location = unsafe { gl.get_attrib_location(self.program, name) };
+
+        if location.is_none() {
+            eprintln!("No attribute `{}` found", name)
+        }
+
+        Attrib::new(location)
     }
 }

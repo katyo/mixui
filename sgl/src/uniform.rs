@@ -12,18 +12,20 @@ mod colours_impls;
 
 /// Uniform location binding
 pub struct Uniform<G: HasContext, T> {
-    pub(super) location: G::UniformLocation,
+    pub(super) location: Option<G::UniformLocation>,
     _type: PhantomData<T>,
 }
 
 impl<G: HasContext, T: AsUniform<G>> Uniform<G, T> {
-    pub(super) fn new(location: G::UniformLocation) -> Self {
+    pub(super) fn new(location: Option<G::UniformLocation>) -> Self {
         Self { location: location, _type: PhantomData }
     }
 
     /// Load data to uniform location
     pub fn load(&self, gl: &G, data: T::Type) {
-        T::uniform_load(gl, &self.location, data);
+        if let Some(location) = &self.location {
+            T::uniform_load(gl, location, data);
+        }
     }
 }
 

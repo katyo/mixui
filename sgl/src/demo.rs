@@ -13,8 +13,8 @@ impl<G: HasContext> Demo<G> {
         let fragment_shader = Shader::new(gl, ShaderType::Fragment, include_str!("./demo.frag.glsl"))?;
         let program = Program::new(gl, vec![vertex_shader, fragment_shader])?;
 
-        let attrib = program.attrib(gl, "position")?;
-        let uniform = program.uniform(gl, "offset")?;
+        let attrib = program.attrib(gl, "position");
+        let uniform = program.uniform(gl, "offset");
 
         let mut vertex = attrib.buffer(gl)?;
         vertex.load(gl, &[
